@@ -13,59 +13,95 @@ class WTFormToJSONSchema(object):
         'URLField': {
             'type': 'string',
             'format': 'uri',
-        },
-        'URIField': {
-            'type': 'string',
-            'format': 'uri',
-        },
-        'URIFileField': {
-            'type': 'string',
-            'format': 'uri',
-            'ux-widget': 'file-select', #not part of spec but flags behavior
+            'form': {
+                'type': 'url',
+            },
         },
         'FileField': {
             'type': 'string',
             'format': 'uri',
-            'ux-widget': 'file-select', #not part of spec but flags behavior
+            'form': {
+                'type': 'file',
+            },
         },
         'DateField': {
             'type': 'string',
             'format': 'date',
+            'form': {
+                'type': 'date',
+            },
         },
         'DateTimeField': {
             'type': 'string',
             'format': 'datetime',
+            'form': {
+                'type': 'datetime',
+            },
         },
         'DecimalField': {
             'type': 'number',
+            'form': {
+                'type': 'number',
+                'step': 'any',
+            },
         },
         'IntegerField': {
             'type': 'integer',
+            'form': {
+                'type': 'number',
+                'min': '1',
+                'step': '1',
+            },
         },
         'BooleanField': {
             'type': 'boolean',
+            'form': {},
         },
         'StringField': {
             'type': 'string',
+            'form': {
+                'type': 'text',
+            },
+        },
+        'PasswordField': {
+            'type': 'string',
+            'form': {
+                'type': 'password',
+            },
         },
         'SearchField': {
             'type': 'string',
+            'form': {
+                'type': 'search',
+            },
         },
         'TelField': {
             'type': 'string',
             'format': 'phone',
+            'form': {
+                'type': 'tel',
+            },
         },
         'EmailField': {
             'type': 'string',
             'format': 'email',
+            'form': {
+                'type': 'email',
+            },
         },
         'DateTimeLocalField': {
             'type': 'string',
             'format': 'datetime',
+            'form': {
+                'type': 'datetime-local',
+            },
         },
         'ColorField': {
             'type': 'string',
             'format': 'color',
+            'form': {
+                'type': 'color',
+            },
         },
         #TODO min/max
         'DecimalRangeField': {
@@ -96,10 +132,11 @@ class WTFormToJSONSchema(object):
             path = []
         if json_schema is None:
             json_schema = {
-                #'title':dockit_schema._meta
-                #'description'
                 'type': 'object',
-                'properties': OrderedDict(),
+                'schema': {
+                    'properties': OrderedDict(),
+                },
+                'form': [],
             }
         key = id(form)
         if key in forms_seen:
@@ -118,8 +155,12 @@ class WTFormToJSONSchema(object):
             if name not in form._fields:
                 continue
             field = form._fields[name]
-            json_schema['properties'][name] = \
+            json_schema['schema']['properties'][name], form_obj = \
                 self.convert_formfield(name, field, json_schema, forms_seen, path)
+            if form_obj is not None:
+                form_obj['key'] = name
+                json_schema['form'].append(form_obj)
+
         return json_schema
 
 
@@ -138,7 +179,9 @@ class WTFormToJSONSchema(object):
         if hasattr(self, 'convert_%s' % ftype):
             return getattr(self, 'convert_%s' % ftype)(name, field, json_schema)
         params = self.conversions.get(ftype)
+        form = None
         if params is not None:
+            form = params.pop('form', None)
             target_def.update(params)
         elif ftype == 'FormField':
             key = id(field.form_class)
@@ -163,7 +206,7 @@ class WTFormToJSONSchema(object):
             target_def.update(self.conversions[it])
         else:
             target_def['type'] = 'string'
-        return target_def
+        return target_def, form
 
     def convert_SelectField(self, name, field, json_schema):
         values = list()
