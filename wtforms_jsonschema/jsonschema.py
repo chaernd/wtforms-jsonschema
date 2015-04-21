@@ -157,9 +157,11 @@ class WTFormToJSONSchema(object):
             field = form._fields[name]
             json_schema['schema']['properties'][name], form_obj = \
                 self.convert_formfield(name, field, json_schema, forms_seen, path)
-            if form_obj is not None:
+            if form_obj is None:
+                form_obj = {'key': name}
+            else:
                 form_obj['key'] = name
-                json_schema['form'].append(form_obj)
+            json_schema['form'].append(form_obj)
 
         return json_schema
 
@@ -178,7 +180,7 @@ class WTFormToJSONSchema(object):
         ftype = type(field).__name__
         if hasattr(self, 'convert_%s' % ftype):
             return getattr(self, 'convert_%s' % ftype)(name, field, json_schema)
-        params = self.conversions.get(ftype)
+        params = dict(self.conversions.get(ftype))
         form = None
         if params is not None:
             form = params.pop('form', None)
