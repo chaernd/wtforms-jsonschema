@@ -1,4 +1,9 @@
+import copy
 from collections import OrderedDict
+
+import six
+import wtforms
+from wtforms.fields import html5
 
 
 def pretty_name(name):
@@ -8,44 +13,71 @@ def pretty_name(name):
     return name.replace('_', ' ').capitalize()
 
 
+_DEFAULT_CONVERSIONS = {}
+_INPUT_TYPE_MAP = {}
+try:
+    import wtforms_components
+
+    _DEFAULT_CONVERSIONS[wtforms_components.ColorField] = {
+        'type': 'string',
+        'format': 'color',
+        'form': {
+            'type': 'color',
+        },
+    }
+
+    # TODO min/max
+    _DEFAULT_CONVERSIONS[wtforms_components.DecimalRangeField] = {
+        'type': 'number',
+    }
+    _DEFAULT_CONVERSIONS[wtforms_components.IntegerRangeField] = {
+        'type': 'integer',
+    }
+    _INPUT_TYPE_MAP['color'] = wtforms_components.ColorField
+
+except ImportError:
+    pass
+
+
 class WTFormToJSONSchema(object):
+
     DEFAULT_CONVERSIONS = {
-        'URLField': {
+        html5.URLField: {
             'type': 'string',
             'format': 'uri',
             'form': {
                 'type': 'url',
             },
         },
-        'FileField': {
+        wtforms.fields.FileField: {
             'type': 'string',
             'format': 'uri',
             'form': {
                 'type': 'file',
             },
         },
-        'DateField': {
+        wtforms.fields.DateField: {
             'type': 'string',
             'format': 'date',
             'form': {
                 'type': 'date',
             },
         },
-        'DateTimeField': {
+        wtforms.fields.DateTimeField: {
             'type': 'string',
             'format': 'datetime',
             'form': {
                 'type': 'datetime',
             },
         },
-        'DecimalField': {
+        wtforms.fields.DecimalField: {
             'type': 'number',
             'form': {
                 'type': 'number',
                 'step': 'any',
             },
         },
-        'IntegerField': {
+        wtforms.fields.IntegerField: {
             'type': 'integer',
             'form': {
                 'type': 'number',
@@ -53,98 +85,80 @@ class WTFormToJSONSchema(object):
                 'step': '1',
             },
         },
-        'BooleanField': {
+        wtforms.fields.BooleanField: {
             'type': 'boolean',
             'form': {},
         },
-        'StringField': {
+        wtforms.fields.StringField: {
             'type': 'string',
             'form': {
                 'type': 'text',
             },
         },
-        'PasswordField': {
+        wtforms.fields.PasswordField: {
             'type': 'string',
             'form': {
                 'type': 'password',
             },
         },
-        'SearchField': {
+        html5.SearchField: {
             'type': 'string',
             'form': {
                 'type': 'search',
             },
         },
-        'TelField': {
+        html5.TelField: {
             'type': 'string',
             'format': 'phone',
             'form': {
                 'type': 'tel',
             },
         },
-        'EmailField': {
+        html5.EmailField: {
             'type': 'string',
             'format': 'email',
             'form': {
                 'type': 'email',
             },
         },
-        'DateTimeLocalField': {
+        html5.DateTimeLocalField: {
             'type': 'string',
             'format': 'datetime',
             'form': {
                 'type': 'datetime-local',
             },
         },
-        'ColorField': {
-            'type': 'string',
-            'format': 'color',
-            'form': {
-                'type': 'color',
-            },
-        },
-        #TODO min/max
-        'DecimalRangeField': {
-            'type': 'number',
-        },
-        'IntegerRangeField': {
-            'type': 'integer',
-        },
     }
 
     INPUT_TYPE_MAP = {
-        'text': 'StringField',
-        'checkbox': 'BooleanField',
-        'color': 'ColorField',
-        'tel': 'TelField',
+        'text': wtforms.fields.StringField,
+        'checkbox': wtforms.fields.BooleanField,
+        'tel': html5.TelField,
     }
 
     def __init__(self, conversions=None, include_array_item_titles=True,
-            include_array_title=True):
+                 include_array_title=True):
         self.conversions = conversions or self.DEFAULT_CONVERSIONS
         self.include_array_item_titles = include_array_item_titles
         self.include_array_title = include_array_title
 
     def convert_form(self, form, json_schema=None, forms_seen=None, path=None):
-        if forms_seen is None:
-            forms_seen = dict()
-        if path is None:
-            path = []
-        if json_schema is None:
-            json_schema = {
-                'type': 'object',
-                'schema': {
-                    'properties': OrderedDict(),
-                },
-                'form': [],
-            }
+        forms_seen = forms_seen or dict()
+        path = path or []
+        json_schema = json_schema or {
+            'type': 'object',
+            'schema': {
+                'properties': OrderedDict(),
+            },
+            'form': [],
+        }
         key = id(form)
         if key in forms_seen:
             json_schema['$ref'] = '#'+'/'.join(forms_seen[key])
             json_schema.pop('properties', None)
             return json_schema
         forms_seen[key] = path
-        #_unbound_fields preserves order, _fields does not
+        # _unbound_fields preserves order, _fields does not
         if hasattr(form, '_unbound_fields'):
             if form._unbound_fields is None:
                 form = form()
@@ -155,8 +169,9 @@ class WTFormToJSONSchema(object):
             if name not in form._fields:
                 continue
             field = form._fields[name]
-            json_schema['schema']['properties'][name], form_obj = \
-                self.convert_formfield(name, field, json_schema, forms_seen, path)
+            json_schema['schema']['properties'][name], form_obj = (
+                self.convert_formfield(name, field, json_schema,
+                                       forms_seen, path))
             if form_obj is None:
                 form_obj = {'key': name}
             else:
@@ -165,6 +180,25 @@ class WTFormToJSONSchema(object):
 
         return json_schema
 
+    def _find_conversion_class(self, cls):
+        if self.conversions.get(cls):
+            return cls
+        else:
+            for klass in six.iterkeys(self.conversions):
+                if issubclass(cls, klass):
+                    return klass
+            raise KeyError(cls)
+
+    def _find_conversion(self, field, name):
+        cls = field.__class__
+        try:
+            klass = self._find_conversion_class(cls)
+            return copy.deepcopy(self.conversions.get(klass))
+        except (KeyError, TypeError) as exc:
+            niexc = NotImplementedError(
+                'Unsupported field {name}: {field!r}'.format(
+                    name=name, field=field))
+            six.raise_from(niexc, exc)
 
     def convert_formfield(self, name, field, json_schema, forms_seen, path):
         widget = field.widget
@@ -175,23 +209,24 @@ class WTFormToJSONSchema(object):
         }
         if field.flags.required:
             target_def['required'] = True
-            json_schema.setdefault('required', list())
+            json_schema.setdefault('required', [])
             json_schema['required'].append(name)
-        ftype = type(field).__name__
-        if hasattr(self, 'convert_%s' % ftype):
-            return getattr(self, 'convert_%s' % ftype)(name, field, json_schema)
-        params = dict(self.conversions.get(ftype))
-        form = None
-        if params is not None:
-            form = params.pop('form', None)
-            target_def.update(params)
-        elif ftype == 'FormField':
+        if hasattr(self, 'convert_%s' % field.__class__.__name__):
+            func = getattr(self, 'convert_%s' % field.__class__.__name__)
+            return func(name, field, json_schema)
+
+        params = self._find_conversion(field, name)
+
+        form = params.pop('form', None)
+        target_def.update(params)
+
+        if isinstance(field, wtforms.fields.FormField):
             key = id(field.form_class)
             if key in forms_seen:
                 return {"$ref": "#"+"/".join(forms_seen[key])}
             forms_seen[key] = path
             target_def.update(self.convert_form(field.form_class(obj=getattr(field, '_obj', None)), None, forms_seen, path))
-        elif ftype == 'FieldList':
+        elif isinstance(field, wtforms.fields.FieldList):
             if not self.include_array_title:
                 target_def.pop('title')
                 target_def.pop('description')
@@ -202,7 +237,7 @@ class WTFormToJSONSchema(object):
                 target_def['items'].pop('title', None)
                 target_def['items'].pop('description', None)
         elif hasattr(widget, 'input_type'):
-            it = self.INPUT_TYPE_MAP.get(widget.input_type, 'StringField')
+            it = self.INPUT_TYPE_MAP.get(widget.input_type, wtforms.fields.StringField)
             if hasattr(self, 'convert_%s' % it):
                 return getattr(self, 'convert_%s' % it)(name, field, json_schema)
             target_def.update(self.conversions[it])
@@ -240,3 +275,6 @@ class WTFormToJSONSchema(object):
             target_def['required'] = True
         return target_def
 
+
+WTFormToJSONSchema.DEFAULT_CONVERSIONS.update(_DEFAULT_CONVERSIONS)
+WTFormToJSONSchema.INPUT_TYPE_MAP.update(_INPUT_TYPE_MAP)
