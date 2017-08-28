@@ -41,97 +41,98 @@ except ImportError:
 
 class WTFormToJSONSchema(object):
 
-    DEFAULT_CONVERSIONS = {
-        html5.URLField: {
+    DEFAULT_CONVERSIONS = OrderedDict([
+        (html5.URLField, {
             'type': 'string',
             'format': 'uri',
             'form': {
                 'type': 'url',
             },
-        },
-        wtforms.fields.FileField: {
+        }),
+        (wtforms.fields.FileField, {
             'type': 'string',
             'format': 'uri',
             'form': {
                 'type': 'file',
             },
-        },
-        wtforms.fields.DateField: {
+        }),
+        (wtforms.fields.DateField, {
             'type': 'string',
             'format': 'date',
             'form': {
                 'type': 'date',
             },
-        },
-        wtforms.fields.DateTimeField: {
+        }),
+        (wtforms.fields.DateTimeField, {
             'type': 'string',
             'format': 'datetime',
             'form': {
                 'type': 'datetime',
             },
-        },
-        wtforms.fields.DecimalField: {
+        }),
+        (wtforms.fields.DecimalField, {
             'type': 'number',
             'form': {
                 'type': 'number',
                 'step': 'any',
             },
-        },
-        wtforms.fields.IntegerField: {
+        }),
+        (wtforms.fields.IntegerField, {
             'type': 'integer',
             'form': {
                 'type': 'number',
                 'min': '1',
                 'step': '1',
             },
-        },
-        wtforms.fields.BooleanField: {
+        }),
+        (wtforms.fields.BooleanField, {
             'type': 'boolean',
             'form': {},
-        },
-        wtforms.fields.StringField: {
-            'type': 'string',
-            'form': {
-                'type': 'text',
-            },
-        },
-        wtforms.fields.PasswordField: {
+        }),
+        (wtforms.fields.PasswordField, {
             'type': 'string',
             'form': {
                 'type': 'password',
             },
-        },
-        html5.SearchField: {
+        }),
+        (html5.SearchField, {
             'type': 'string',
             'form': {
                 'type': 'search',
             },
-        },
-        html5.TelField: {
+        }),
+        (html5.TelField, {
             'type': 'string',
             'format': 'phone',
             'form': {
                 'type': 'tel',
             },
-        },
-        html5.EmailField: {
+        }),
+        (html5.EmailField, {
             'type': 'string',
             'format': 'email',
             'form': {
                 'type': 'email',
             },
-        },
-        html5.DateTimeLocalField: {
+        }),
+        (html5.DateTimeLocalField, {
             'type': 'string',
             'format': 'datetime',
             'form': {
                 'type': 'datetime-local',
             },
-        },
-    }
+        }),
+        (wtforms.fields.StringField, {
+            'type': 'string',
+            'form': {
+                'type': 'text',
+            },
+        }),
+    ])
 
     INPUT_TYPE_MAP = {
         'text': wtforms.fields.StringField,
+        'password': wtforms.fields.PasswordField,
         'checkbox': wtforms.fields.BooleanField,
         'tel': html5.TelField,
     }
