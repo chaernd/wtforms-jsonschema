@@ -4,6 +4,7 @@ from collections import OrderedDict
 import six
 import wtforms
 from wtforms.fields import html5
+from wtforms.validators import Length
 
 
 def pretty_name(name):
@@ -212,6 +213,12 @@ class WTFormToJSONSchema(object):
             target_def['required'] = True
             json_schema.setdefault('required', [])
             json_schema['required'].append(name)
+        for validator in field.validators:
+            if isinstance(validator, Length):
+                if validator.min != -1:
+                    target_def['minLength'] = validator.min
+                if validator.max != -1:
+                    target_def['maxLength'] = validator.max
         if hasattr(self, 'convert_%s' % field.__class__.__name__):
             func = getattr(self, 'convert_%s' % field.__class__.__name__)
             return func(name, field, json_schema)
